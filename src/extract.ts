@@ -11,6 +11,7 @@ import type {
   ImportDeclaration,
   TaggedTemplateExpression,
 } from '@babel/types';
+import { stripRelayCompilerDirectives } from './strip.js';
 
   export function processRelaySourceFile(filePath: string): DocumentNode[] {
     const code = fs.readFileSync(filePath, 'utf-8');
@@ -84,7 +85,9 @@ import type {
     for (const t of templates) {
       try {
         const doc = gqlParse(t.content);
-        documents.push(doc);
+        // Strip Relay compiler directives at extraction time
+        const cleaned = stripRelayCompilerDirectives(doc) as DocumentNode;
+        documents.push(cleaned);
       } catch (e) {
         console.error('  Error parsing Relay graphql template', t.loc ? `at ${t.loc.line}:${t.loc.column}` : '', e instanceof Error ? e.message : e);
       }

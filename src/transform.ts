@@ -158,8 +158,9 @@ export function optimizeAndFlatten(
 			const maybeDoc = (first as any).document ?? first;
 			out = maybeDoc as DocumentNode;
 		}
-	} catch {
+	} catch(ex) {
 		// On optimizer failure, continue with original doc
+        console.error(ex)
 		out = doc;
 	}
 

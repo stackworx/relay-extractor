@@ -4,15 +4,16 @@ import {
   buildClientSchema,
   buildSchema,
   concatAST,
+  extendSchema,
   print,
   separateOperations,
   // extendSchema,
-  // parse as gqlParse,
+  parse as gqlParse,
 } from 'graphql';
 // moved optimization into transform wrapper
 
 import {processRelaySourceFile} from './extract.js';
-import {stripRelayClientFields, stripRelayCompilerDirectives} from './strip.js';
+import {stripRelayClientFields} from './strip.js';
 import { optimizeAndFlatten } from './transform.js';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
@@ -86,7 +87,6 @@ class GraphQLOperationExtractor {
           }
         }
 
-        /*
         if (schema) {
           const RELAY_CLIENT_DIRECTIVES_SDL = `
             directive @relay(mask: Boolean, plural: Boolean) on FRAGMENT_SPREAD | FRAGMENT_DEFINITION
@@ -106,7 +106,6 @@ class GraphQLOperationExtractor {
             console.warn('Skipping Relay directive augmentation:', augmentErr instanceof Error ? augmentErr.message : augmentErr);
           }
         }
-          */
       } catch (e) {
         console.warn('Failed to load schema:', e instanceof Error ? e.message : e);
         return;
@@ -131,7 +130,8 @@ class GraphQLOperationExtractor {
         }
       }
 
-      const cleaned = stripRelayCompilerDirectives(stripRelayClientFields(docToWrite as any)) as any;
+      // Relay compiler directives are now stripped during extraction in processRelaySourceFile
+      const cleaned = stripRelayClientFields(docToWrite as any) as any;
       const printed = print(cleaned as any);
       const outFile = path.join(
         this.outDir,
@@ -188,3 +188,4 @@ const argv = yargs(hideBin(process.argv))
 
 const extractor = new GraphQLOperationExtractor(argv.src, argv.out, argv.schema);
 extractor.extractOperations();
+
