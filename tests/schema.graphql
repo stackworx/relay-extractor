@@ -46,6 +46,11 @@ type User implements Node {
   profileImage: Image
 }
 
+# Extension to the User type to ensure transforms respect extended fields
+extend type User {
+  bio: String
+}
+
 type Image {
   url: String!
   width: Int

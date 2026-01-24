@@ -1,0 +1,32 @@
+query UserQueryArguments($id: ID!, $count: Int = 5, $includeImage: Boolean = false) {
+	user(id: $id) {
+		id
+		username
+		...UserDetailsFragment @arguments(count: $count, includeImage: $includeImage)
+	}
+}
+
+fragment UserDetailsFragment on User @argumentDefinitions(
+	count: { type: "Int", defaultValue: 5 },
+	includeImage: { type: "Boolean!", defaultValue: false }
+) {
+	id
+	name
+	friends(first: $count) @connection(key: "UserDetailsFragment_friends") {
+		edges {
+			node {
+				id
+				name
+			}
+		}
+		pageInfo {
+			endCursor
+			hasNextPage
+		}
+	}
+	profileImage @include(if: $includeImage) {
+		url
+		width
+		height
+	}
+}

@@ -1,6 +1,8 @@
 import { Kind } from "graphql";
 
-
+/**
+ * Remove Relay internal fields (like __id) that are not part of the server schema.
+ */
 export function stripRelayClientFields<T>(node: T): T {
   if (node === null) {
     return node

@@ -1,23 +1,10 @@
-# tsdown-starter
+# Read Me
 
-A starter for creating a TypeScript package.
+This project is meant to extract all the GraphQL operations from a relay project
+and clean them so that a client can be generated
 
-## Development
+## Issues
 
-- Install dependencies:
-
-```bash
-npm install
-```
-
-- Run the unit tests:
-
-```bash
-npm run test
-```
-
-- Build the library:
-
-```bash
-npm run build
-```
+- Remove Relay Compiler Directives
+- Remove Relay Interla fields (`__id`)
+- Handle missing arguments that relay handles with `argumentDefinitions`

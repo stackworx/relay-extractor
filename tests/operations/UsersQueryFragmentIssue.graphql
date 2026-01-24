@@ -1,0 +1,18 @@
+query UsersQuery($first: Int!, $after: String) {
+  users(first: $first, after: $after) @connection(key: "Users_users", filters: ["first"]) {
+    edges {
+      node {
+        profileImage {
+          url
+          height
+        }
+        ... on User {
+          profileImage {
+          url
+          width
+        }
+        }
+      }
+    }
+  }
+}
