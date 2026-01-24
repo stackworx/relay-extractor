@@ -97,3 +97,59 @@ export function stripRelayCompilerDirectives<T>(node: T): T {
 
   return out;
 }
+
+/**
+ * For mutation operations, strip variable `$connections` and any field arguments named `connections`.
+ */
+export function stripMutationConnectionsArgs<T>(node: T): T {
+  if (node == null) return node;
+
+  if (Array.isArray(node)) {
+    return node.map(stripMutationConnectionsArgs) as any;
+  }
+
+  if (typeof node !== 'object') {
+    return node;
+  }
+
+  const anyNode: any = node;
+
+  // Remove from field arguments
+  if (anyNode.kind === Kind.FIELD && Array.isArray(anyNode.arguments)) {
+    const args = anyNode.arguments
+      .map(stripMutationConnectionsArgs)
+      .filter((arg: any) => arg && arg.name?.value !== 'connections');
+    const outField: any = { ...anyNode, arguments: args };
+    // Recurse into remaining properties
+    const out: any = {};
+    for (const [k, v] of Object.entries(outField)) {
+      if (k === 'loc') continue;
+      out[k] = stripMutationConnectionsArgs(v as any);
+    }
+    return out;
+  }
+
+  // For OperationDefinition of type mutation, filter variableDefinitions
+  if (anyNode.kind === Kind.OPERATION_DEFINITION && anyNode.operation === 'mutation') {
+    const out: any = {};
+    for (const [k, v] of Object.entries(anyNode)) {
+      if (k === 'loc') continue;
+      if (k === 'variableDefinitions' && Array.isArray(v)) {
+        out[k] = v
+          .map(stripMutationConnectionsArgs)
+          .filter((vd: any) => vd && vd.variable?.name?.value !== 'connections');
+        continue;
+      }
+      out[k] = stripMutationConnectionsArgs(v as any);
+    }
+    return out;
+  }
+
+  const out: any = {};
+  for (const [k, v] of Object.entries(anyNode)) {
+    if (k === 'loc') continue;
+    out[k] = stripMutationConnectionsArgs(v as any);
+  }
+
+  return out;
+}

@@ -14,7 +14,7 @@ import {
 
 import {processRelaySourceFile} from './extract.js';
 import {stripRelayClientFields} from './strip.js';
-import { optimizeAndFlatten } from './transform.js';
+import { optimizeAndFlatten, stripUnknownArgsAndUnusedVars } from './transform.js';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
@@ -131,6 +131,15 @@ class GraphQLOperationExtractor {
       }
 
       // Relay compiler directives are now stripped during extraction in processRelaySourceFile
+      // If schema is available, remove unknown field arguments and unused variables for mutations
+      if (schema) {
+        try {
+          docToWrite = stripUnknownArgsAndUnusedVars(schema as any, docToWrite as any) as any;
+        } catch (e) {
+          console.warn('Arg/var strip failed:', e instanceof Error ? e.message : e);
+        }
+      }
+
       const cleaned = stripRelayClientFields(docToWrite as any) as any;
       const printed = print(cleaned as any);
       const outFile = path.join(

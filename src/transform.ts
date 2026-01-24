@@ -169,3 +169,59 @@ export function optimizeAndFlatten(
 	return out;
 }
 
+/**
+ * Strip unknown field arguments (not present in schema) and remove unused variables
+ * from mutation operations. This helps clean Relay-specific or client-only args
+ * and any variables left unused after other transforms.
+ */
+export function stripUnknownArgsAndUnusedVars(
+	schema: GraphQLSchema,
+	doc: DocumentNode,
+): DocumentNode {
+	const typeInfo = new TypeInfo(schema);
+	const opUsedStack: Array<Set<string>> = [];
+	let inVarDefDepth = 0;
+
+	return visit(
+		doc,
+		visitWithTypeInfo(typeInfo, {
+			OperationDefinition: {
+				enter() {
+					opUsedStack.push(new Set<string>());
+				},
+				leave(node) {
+					// Only adjust variable definitions for mutations
+					const used = opUsedStack.pop() ?? new Set<string>();
+					if (node.operation !== 'mutation') return node;
+					const vdefs = node.variableDefinitions ?? [];
+					const filtered = vdefs.filter(vd => used.has(vd.variable.name.value));
+					if (filtered.length !== vdefs.length) {
+						return { ...node, variableDefinitions: filtered } as any;
+					}
+					return node;
+				},
+			},
+			VariableDefinition: {
+				enter() { inVarDefDepth+=1; },
+				leave() { inVarDefDepth-=1; return undefined as any; },
+			},
+			Variable(variableNode) {
+				if (inVarDefDepth > 0) return undefined;
+				const current = opUsedStack[opUsedStack.length - 1];
+				if (current) current.add(variableNode.name.value);
+				return undefined;
+			},
+			Field(fieldNode) {
+				const fieldDef = typeInfo.getFieldDef();
+				if (!fieldDef || !fieldNode.arguments || fieldNode.arguments.length === 0) return;
+				const allowed = new Set(fieldDef.args.map(a => a.name));
+				const newArgs = fieldNode.arguments.filter(arg => allowed.has(arg.name.value));
+				if (newArgs.length !== fieldNode.arguments.length) {
+					return { ...fieldNode, arguments: newArgs } as any;
+				}
+				return undefined;
+			},
+		}),
+	);
+}
+
