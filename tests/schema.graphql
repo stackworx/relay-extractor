@@ -1,0 +1,73 @@
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+# Relay compiler directives used in tests
+directive @relay(mask: Boolean) on FRAGMENT_DEFINITION | FRAGMENT_SPREAD
+directive @refetchable(queryName: String!) on FRAGMENT_DEFINITION
+directive @inline on FRAGMENT_DEFINITION
+directive @module(name: String!) on FRAGMENT_SPREAD
+
+# Connection-related directives
+directive @connection(key: String!, filters: [String]) on FIELD
+# Legacy/extended directives sometimes used by Relay compiler transforms
+directive @appendNode(edgeTypeName: String!, connections: [ID!]!) on FIELD
+directive @prependNode(edgeTypeName: String!, connections: [ID!]!) on FIELD
+directive @appendEdge(connections: [ID!]!) on FIELD
+directive @prependEdge(connections: [ID!]!) on FIELD
+directive @deleteRecord(id: ID!) on FIELD
+directive @deleteEdge(connections: [ID!]!, nodeID: ID) on FIELD
+directive @stream_connection(initial_count: Int!, key: String!, label: String) on FIELD
+
+# GraphQL incremental delivery (used by Relay)
+directive @defer(if: Boolean = true, label: String) on FRAGMENT_SPREAD | INLINE_FRAGMENT | FIELD
+directive @stream(if: Boolean = true, label: String, initial_count: Int!) on FIELD
+
+scalar DateTime
+
+interface Node {
+  id: ID!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+type User implements Node {
+  id: ID!
+  name: String!
+  username: String
+  createdAt: DateTime
+  friends(first: Int, after: String): UserConnection
+  profileImage: Image
+}
+
+type Image {
+  url: String!
+  width: Int
+  height: Int
+}
+
+type UserEdge {
+  node: User
+  cursor: String!
+}
+
+type UserConnection {
+  edges: [UserEdge!]
+  pageInfo: PageInfo!
+}
+
+type Query {
+  node(id: ID!): Node
+  user(id: ID!): User
+  users(first: Int, after: String): UserConnection
+}
+
+type Mutation {
+  followUser(userId: ID!): User
+}

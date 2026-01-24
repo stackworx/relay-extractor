@@ -1,0 +1,18 @@
+query UserQuery($id: ID!) {
+  user(id: $id) {
+    id
+    name
+    ...UserFragment @defer(label: "UserFrag")
+    friends(first: 10) @stream(initial_count: 2, label: "Friends") {
+      edges {
+        node {
+          id
+          name
+        }
+      }
+    }
+  }
+}
+
+# For completeness, import fragments defined in another file (tooling may stitch these)
+# fragment UserFragment on User { ... }

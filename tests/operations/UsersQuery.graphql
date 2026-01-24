@@ -1,0 +1,20 @@
+query UsersQuery($first: Int!, $after: String) {
+  users(first: $first, after: $after) @connection(key: "Users_users", filters: ["first"]) {
+    edges {
+      node {
+        id
+        name
+        username
+        ...InlineUserInfo
+      }
+    }
+    pageInfo {
+      endCursor
+      hasNextPage
+    }
+  }
+}
+
+fragment InlineUserInfo on User @inline {
+  username
+}

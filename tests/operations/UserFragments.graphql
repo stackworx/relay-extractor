@@ -1,0 +1,17 @@
+fragment UserFragment on User @relay(mask: false) {
+  id
+  name
+  friends(first: 5) @connection(key: "UserFragment_friends") {
+    edges {
+      node {
+        id
+        name
+      }
+    }
+  }
+}
+
+fragment UserRefetchableFragment on User @refetchable(queryName: "UserFragmentRefetchQuery") {
+  id
+  name
+}
