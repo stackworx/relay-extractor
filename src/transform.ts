@@ -164,6 +164,13 @@ export function optimizeAndFlatten(
 		out = doc;
 	}
 
+	// Strip aliases on leaf fields to improve compatibility with Strawberry Shake
+	out = removeAliasesOnLeafFields(schema, out);
+
+	// Deduplicate selections after alias stripping to avoid duplicate leaf fields
+	out = dedupeAllSelectionSets(out);
+
+	// Finally, flatten same-type inline fragments
 	out = flattenInlineFragmentsSameType(out, schema);
 
 	return out;
@@ -223,5 +230,45 @@ export function stripUnknownArgsAndUnusedVars(
 			},
 		}),
 	);
+}
+
+/**
+ * Remove aliases from scalar/leaf fields to avoid client issues with aliases on leaves.
+ * Leaf is determined via the schema (non-composite named type) or absence of a selectionSet.
+ */
+export function removeAliasesOnLeafFields(
+	schema: GraphQLSchema,
+	doc: DocumentNode,
+): DocumentNode {
+	const typeInfo = new TypeInfo(schema);
+	return visit(
+		doc,
+		visitWithTypeInfo(typeInfo, {
+			Field(fieldNode) {
+				if (!fieldNode.alias) return undefined;
+				const fieldDef = typeInfo.getFieldDef();
+				const outputType = fieldDef?.type;
+				const named = outputType ? getNamedType(outputType) : null;
+				const isLeafByType = named ? !isCompositeType(named) : false;
+				const isLeafByStructure = !fieldNode.selectionSet;
+				if (isLeafByType || isLeafByStructure) {
+					// Remove alias for leaf/scalar
+					return { ...fieldNode, alias: undefined } as any;
+				}
+				return undefined;
+			},
+		}),
+	);
+}
+
+/**
+ * Apply selection set deduplication across the entire document.
+ */
+export function dedupeAllSelectionSets(doc: DocumentNode): DocumentNode {
+	return visit(doc, {
+		SelectionSet(node) {
+			return dedupeSelectionSet(node);
+		},
+	});
 }
 

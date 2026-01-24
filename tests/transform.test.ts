@@ -214,3 +214,54 @@ test('optimizeAndFlatten merges fields; fragment may be inlined', () => {
   }
 });
 
+test('removes aliases on leaf fields (scalars) and nested leaves', () => {
+  const doc = parse(/* GraphQL */`
+    query Q {
+      user(id: "1") {
+        idAlias: id
+        nameAlias: name
+        profileImage { urlAlias: url }
+      }
+    }
+  `);
+
+  const transformed = optimizeAndFlatten(schema, doc);
+  const printed = normalize(print(transformed));
+  // Aliases should be removed
+  expect(printed).toContain('id');
+  expect(printed).toContain('name');
+  expect(printed).toContain('profileImage {');
+  expect(printed).toContain('url');
+  // Aliased names should not appear
+  expect(printed).not.toContain('idAlias');
+  expect(printed).not.toContain('nameAlias');
+  expect(printed).not.toContain('urlAlias');
+});
+
+test('dedupes duplicates created after alias removal', () => {
+  const doc = parse(/* GraphQL */`
+    query Q {
+      user(id: "1") {
+        idAlias: id
+        id
+        profileImage {
+          widthAlias: width
+          width
+        }
+      }
+    }
+  `);
+
+  const transformed = optimizeAndFlatten(schema, doc);
+  const op = transformed.definitions.find(d => d.kind === Kind.OPERATION_DEFINITION) as any;
+  const userField: any = findField(op.selectionSet, 'user');
+  const userSubFields = userField.selectionSet.selections.filter((s: any) => s.kind === Kind.FIELD);
+  const idOccurrences = userSubFields.filter((f: any) => f.name.value === 'id').length;
+  expect(idOccurrences).toBe(1);
+
+  const profileImage: any = findField(userField.selectionSet, 'profileImage');
+  const imageSubFields = profileImage.selectionSet.selections.filter((s: any) => s.kind === Kind.FIELD);
+  const widthOccurrences = imageSubFields.filter((f: any) => f.name.value === 'width').length;
+  expect(widthOccurrences).toBe(1);
+});
+
