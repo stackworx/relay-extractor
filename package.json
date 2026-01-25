@@ -1,7 +1,7 @@
 {
   "name": "@stackworx/relay-extractor",
   "type": "module",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Relay Query Extractor for Testing",
   "license": "MIT",
   "homepage": "https://github.com/stackworx/RelayExtractor",
