@@ -26,11 +26,13 @@ class GraphQLOperationExtractor {
   private sourceFolder: string;
   private outDir: string;
   private schemaPath?: string;
+  private excludeSubscriptions: boolean;
 
-  constructor(sourceFolder: string, outDir: string, schemaPath?: string) {
+  constructor(sourceFolder: string, outDir: string, schemaPath?: string, excludeSubscriptions: boolean = false) {
     this.sourceFolder = sourceFolder;
     this.outDir = outDir;
     this.schemaPath = schemaPath;
+    this.excludeSubscriptions = excludeSubscriptions;
   }
 
   /**
@@ -117,6 +119,14 @@ class GraphQLOperationExtractor {
     // If a schema is provided, optimize each separated document first.
     opNames.forEach((opName, idx) => {
       const opDoc = separated[opName];
+
+      // Optionally skip subscription operations
+      if (this.excludeSubscriptions) {
+        const isSubscription = (opDoc.definitions ?? []).some((d: any) => d.kind === 'OperationDefinition' && d.operation === 'subscription');
+        if (isSubscription) {
+          return; // skip writing this operation
+        }
+      }
       const safeName = opName && opName.length > 0 ? opName : `anonymous_${idx + 1}`;
 
       let docToWrite: any = opDoc;
@@ -192,10 +202,15 @@ const argv = yargs(hideBin(process.argv))
     type: 'string',
     describe: 'Path to GraphQL schema (.graphql or introspection .json)',
   })
+  .option('exclude-subscriptions', {
+    type: 'boolean',
+    describe: 'Exclude subscription operations from output',
+    default: false,
+  })
   .strict()
   .help()
   .parseSync();
 
-const extractor = new GraphQLOperationExtractor(argv.src, argv.out, argv.schema);
+const extractor = new GraphQLOperationExtractor(argv.src, argv.out, argv.schema, argv['exclude-subscriptions'] as boolean);
 extractor.extractOperations();
 

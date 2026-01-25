@@ -6,6 +6,20 @@
 This project is meant to extract all the GraphQL operations from a relay project
 and clean them so that a client can be generated
 
+## CLI Usage
+
+Extract operations from a source folder to an output directory. Optionally provide a schema (SDL or introspection JSON) and exclude subscriptions.
+
+```bash
+npx @stackworx/relay-extractor \
+	--src ./src \
+	--out ./out \
+	--schema ./schema.graphql \
+	--exclude-subscriptions
+```
+
+- **`--exclude-subscriptions`**: When set, subscription operations are skipped and not written to the output.
+
 ## Issues
 
 - Remove Relay Compiler Directives
