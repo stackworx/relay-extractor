@@ -21,7 +21,7 @@
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "test": "vitest --run",
+    "test": "vitest",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build",
     "local": "node dist/index.mjs"
