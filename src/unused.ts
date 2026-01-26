@@ -83,7 +83,12 @@ export function unused(schema: GraphQLSchema, documents: DocumentNode[]): FieldU
     const allFieldNames = Object.keys(fields);
     const usedSet = usedMap.get(typeName) ?? new Set<string>();
     const edgesUsed = usedSet.has('edges');
+    const isConnectionType = typeName.endsWith('Connection');
     const unused = allFieldNames.filter((f) => {
+      // For Connection types, do not report these common fields
+      if (isConnectionType && (f === 'edges' || f === 'nodes' || f === 'pageInfo' || f === 'totalCount')) {
+        return false;
+      }
       // If edges are used on a connection, do not report pageInfo as unused
       if (edgesUsed && f === 'pageInfo') return false;
       // Do not report scalar 'cursor' fields as unused

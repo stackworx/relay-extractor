@@ -10,6 +10,8 @@ import {
   separateOperations,
   // extendSchema,
   parse as gqlParse,
+  isScalarType,
+  getNamedType,
 } from 'graphql';
 // moved optimization into transform wrapper
 
@@ -236,6 +238,15 @@ yargs(hideBin(process.argv))
         .option('schema', {
           type: 'string',
           describe: 'Path to GraphQL schema (.graphql or introspection .json)',
+        })
+        .option('include-scalars', {
+          type: 'boolean',
+          describe: 'Include scalar fields in the unused report',
+          default: false,
+        })
+        .option('ignore-fields', {
+          type: 'string',
+          describe: 'Comma-separated list of field names to ignore from unused reporting (e.g., createdAt,updatedAt)',
         }),
     (argv) => {
       const src = argv.src as string;
@@ -306,12 +317,32 @@ yargs(hideBin(process.argv))
 
       // Print summary of unused fields per type (skip empty ones)
       const types = Object.keys(report.unusedFieldsByType).sort();
+      const includeScalars = (argv['include-scalars'] as boolean | undefined) ?? false;
+      const ignoreArg = (argv['ignore-fields'] as string | undefined) ?? '';
+      const ignoreFields = ignoreArg
+        .split(',')
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+      const ignoreSet = new Set<string>(['id', ...ignoreFields]);
       let totalUnused = 0;
       types.forEach(t => {
         const unusedFields = report.unusedFieldsByType[t];
-        if (unusedFields && unusedFields.length > 0) {
-          totalUnused += unusedFields.length;
-          console.log(`${t}: ${unusedFields.sort().join(', ')}`);
+        const filtered = (unusedFields || []).filter(f => {
+          if (ignoreSet.has(f)) return false;
+          if (!includeScalars) {
+            const typeObj: any = schema.getTypeMap()[t];
+            const fieldsObj = typeObj?.getFields?.();
+            const field = fieldsObj ? fieldsObj[f] : undefined;
+            if (field) {
+              const named = getNamedType(field.type);
+              if (isScalarType(named)) return false;
+            }
+          }
+          return true;
+        });
+        if (filtered.length > 0) {
+          totalUnused += filtered.length;
+          console.log(`${t}: ${filtered.sort().join(', ')}`);
         }
       });
       if (totalUnused === 0) {

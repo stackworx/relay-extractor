@@ -152,7 +152,16 @@ export function optimizeAndFlatten(
 			out = doc;
 		} else {
 			if (optimizedResults.length !== 1) {
-				throw new Error('optimizeDocuments returned multiple documents for a single input. Expected exactly one.');
+				// Provide helpful context: operation/fragment names and source name if available
+				const names = doc.definitions
+					.map((d: any) => d?.name?.value)
+					.filter((n: any) => typeof n === 'string' && n.length > 0);
+				const sourceName = (doc as any)?.loc?.source?.name;
+				const contextPieces: string[] = [];
+				if (sourceName) contextPieces.push(`source: ${sourceName}`);
+				if (names.length > 0) contextPieces.push(`definitions: ${names.join(', ')}`);
+				const contextMsg = contextPieces.length ? ` (${contextPieces.join(' | ')})` : '';
+				throw new Error(`optimizeDocuments returned multiple documents for a single input. Expected exactly one.${contextMsg}`);
 			}
 			const first = optimizedResults[0];
 			const maybeDoc = (first as any).document ?? first;
