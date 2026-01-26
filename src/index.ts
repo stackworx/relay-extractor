@@ -16,6 +16,7 @@ import {
 import {processRelaySourceFile} from './extract.js';
 import {stripRelayClientFields} from './strip.js';
 import { optimizeAndFlatten, stripUnknownArgsAndUnusedVars } from './transform.js';
+import { unused } from './unused.js';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
@@ -186,31 +187,140 @@ class GraphQLOperationExtractor {
 }
 
 
-// Main execution via yargs CLI
-const argv = yargs(hideBin(process.argv))
-  .option('src', {
-    type: 'string',
-    describe: 'Source folder to scan for GraphQL operations',
-    default: './graphql',
-  })
-  .option('out', {
-    type: 'string',
-    describe: 'Output directory for extracted operations',
-    default: './out',
-  })
-  .option('schema', {
-    type: 'string',
-    describe: 'Path to GraphQL schema (.graphql or introspection .json)',
-  })
-  .option('exclude-subscriptions', {
-    type: 'boolean',
-    describe: 'Exclude subscription operations from output',
-    default: false,
-  })
+// Main execution via yargs CLI with 'extract' subcommand
+yargs(hideBin(process.argv))
+  .command(
+    'extract',
+    'Extract GraphQL operations from source files',
+    (y) =>
+      y
+        .option('src', {
+          type: 'string',
+          describe: 'Source folder to scan for GraphQL operations',
+          default: './graphql',
+        })
+        .option('out', {
+          type: 'string',
+          describe: 'Output directory for extracted operations',
+          default: './out',
+        })
+        .option('schema', {
+          type: 'string',
+          describe: 'Path to GraphQL schema (.graphql or introspection .json)',
+        })
+        .option('exclude-subscriptions', {
+          type: 'boolean',
+          describe: 'Exclude subscription operations from output',
+          default: false,
+        }),
+    (argv) => {
+      const extractor = new GraphQLOperationExtractor(
+        argv.src as string,
+        argv.out as string,
+        (argv.schema as string | undefined),
+        argv['exclude-subscriptions'] as boolean,
+      );
+      extractor.extractOperations();
+    },
+  )
+  .command(
+    'unused',
+    'Identity unused fields in the GraphQL schema based on operations found in source files',
+    (y) =>
+      y
+        .option('src', {
+          type: 'string',
+          describe: 'Source folder to scan',
+          default: './graphql',
+        })
+        .option('schema', {
+          type: 'string',
+          describe: 'Path to GraphQL schema (.graphql or introspection .json)',
+        }),
+    (argv) => {
+      const src = argv.src as string;
+      const schemaArg = argv.schema as string | undefined;
+
+      if (!schemaArg) {
+        console.error('Schema path is required for the "unused" command.');
+        return;
+      }
+
+      if (!fs.existsSync(src)) {
+        console.error(`Source folder does not exist: ${src}`);
+        return;
+      }
+
+      // Load schema (same logic as extract)
+      let schema = undefined as ReturnType<typeof buildSchema> | ReturnType<typeof buildClientSchema> | undefined;
+      try {
+        const schemaContent = fs.readFileSync(schemaArg, 'utf-8');
+        if (schemaArg.endsWith('.graphql') || schemaArg.endsWith('.gql')) {
+          schema = buildSchema(schemaContent);
+        } else if (schemaArg.endsWith('.json')) {
+          const json = JSON.parse(schemaContent);
+          const introspection = json.data ?? json;
+          if (introspection && introspection.__schema) {
+            schema = buildClientSchema(introspection);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load schema:', e instanceof Error ? e.message : e);
+        return;
+      }
+
+      if (!schema) {
+        console.error('Failed to construct GraphQL schema from provided path.');
+        return;
+      }
+
+      // Gather documents from source files
+      const getFiles = (dir: string, extensions: string[]): string[] => {
+        const found: string[] = [];
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            found.push(...getFiles(fullPath, extensions));
+          } else if (entry.isFile() && extensions.some(ext => entry.name.endsWith(ext))) {
+            found.push(fullPath);
+          }
+        }
+        return found;
+      };
+
+      const sourceFiles = getFiles(src, ['.ts', '.tsx', '.js', '.jsx']);
+      const documents: ReturnType<typeof processRelaySourceFile> = [] as any;
+      sourceFiles.forEach(file => {
+        const docs = processRelaySourceFile(file);
+        if (docs && docs.length > 0) documents.push(...docs);
+      });
+
+      if (!documents || documents.length === 0) {
+        console.log('No GraphQL documents found in source files.');
+        return;
+      }
+
+      // Run unused analysis
+      const report = unused(schema as any, documents as any);
+
+      // Print summary of unused fields per type (skip empty ones)
+      const types = Object.keys(report.unusedFieldsByType).sort();
+      let totalUnused = 0;
+      types.forEach(t => {
+        const unusedFields = report.unusedFieldsByType[t];
+        if (unusedFields && unusedFields.length > 0) {
+          totalUnused += unusedFields.length;
+          console.log(`${t}: ${unusedFields.sort().join(', ')}`);
+        }
+      });
+      if (totalUnused === 0) {
+        console.log('No unused fields detected.');
+      }
+    },
+  )
+  .demandCommand(1, 'Please specify a command, e.g. "extract"')
   .strict()
   .help()
-  .parseSync();
-
-const extractor = new GraphQLOperationExtractor(argv.src, argv.out, argv.schema, argv['exclude-subscriptions'] as boolean);
-extractor.extractOperations();
+  .parse();
 
