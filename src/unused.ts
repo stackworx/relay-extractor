@@ -1,5 +1,4 @@
 import { GraphQLSchema, type DocumentNode, concatAST, visit, TypeInfo, visitWithTypeInfo, isObjectType, isScalarType, getNamedType } from 'graphql';
-import { optimizeAndFlatten } from './transform.js';
 
 export interface FieldUsageResult {
   usedFieldsByType: Record<string, string[]>;
@@ -8,55 +7,55 @@ export interface FieldUsageResult {
 }
 
 export function unused(schema: GraphQLSchema, documents: DocumentNode[]): FieldUsageResult {
-  const merged = concatAST(documents);
-  const optimized = optimizeAndFlatten(schema, merged);
   const usedMap = new Map<string, Set<string>>();
   const aliasMap = new Map<string, Map<string, Set<string>>>();
 
-  const typeInfo = new TypeInfo(schema);
-  visit(
-    optimized,
-    visitWithTypeInfo(typeInfo, {
-      Field(node) {
-        const parent = typeInfo.getParentType();
+  for (const doc of documents) {
+    const typeInfo = new TypeInfo(schema);
+    visit(
+      doc,
+      visitWithTypeInfo(typeInfo, {
+        Field(node) {
+          const parent = typeInfo.getParentType();
 
-        // Only track field usage on concrete object types.
-        // Interfaces, unions, and other non-object parent types are ignored
-        // intentionally, since the report focuses on GraphQLObjectType fields.
-        if (!parent || !isObjectType(parent)) {
+          // Only track field usage on concrete object types.
+          // Interfaces, unions, and other non-object parent types are ignored
+          // intentionally, since the report focuses on GraphQLObjectType fields.
+          if (!parent || !isObjectType(parent)) {
+              return;
+          }
+          const typeName = parent.name;
+          const fieldName = node.name.value;
+          // Ignore Relay/GraphQL meta fields such as __typename and other __*
+          if (fieldName.startsWith('__')) {
             return;
-        }
-        const typeName = parent.name;
-        const fieldName = node.name.value;
-        // Ignore Relay/GraphQL meta fields such as __typename and other __*
-        if (fieldName.startsWith('__')) {
-          return;
-        }
-        const aliasName = node.alias?.value;
-
-        let typeFields = usedMap.get(typeName);
-        if (!typeFields) {
-          typeFields = new Set<string>();
-          usedMap.set(typeName, typeFields);
-        }
-        typeFields.add(fieldName);
-
-        if (aliasName) {
-          let typeAliases = aliasMap.get(typeName);
-          if (!typeAliases) {
-            typeAliases = new Map<string, Set<string>>();
-            aliasMap.set(typeName, typeAliases);
           }
-          let fieldAliases = typeAliases.get(fieldName);
-          if (!fieldAliases) {
-            fieldAliases = new Set<string>();
-            typeAliases.set(fieldName, fieldAliases);
+          const aliasName = node.alias?.value;
+
+          let typeFields = usedMap.get(typeName);
+          if (!typeFields) {
+            typeFields = new Set<string>();
+            usedMap.set(typeName, typeFields);
           }
-          fieldAliases.add(aliasName);
-        }
-      },
-    }),
-  );
+          typeFields.add(fieldName);
+
+          if (aliasName) {
+            let typeAliases = aliasMap.get(typeName);
+            if (!typeAliases) {
+              typeAliases = new Map<string, Set<string>>();
+              aliasMap.set(typeName, typeAliases);
+            }
+            let fieldAliases = typeAliases.get(fieldName);
+            if (!fieldAliases) {
+              fieldAliases = new Set<string>();
+              typeAliases.set(fieldName, fieldAliases);
+            }
+            fieldAliases.add(aliasName);
+          }
+        },
+      }),
+    );
+  }
 
   const usedFieldsByType: Record<string, string[]> = {};
   for (const [typeName, fields] of usedMap.entries()) {
