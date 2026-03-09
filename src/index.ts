@@ -18,7 +18,7 @@ import {
 import {processRelaySourceFile} from './extract.js';
 import {stripRelayClientFields} from './strip.js';
 import { optimizeAndFlatten, stripUnknownArgsAndUnusedVars } from './transform.js';
-import { unused } from './unused.js';
+import { annotateSchemaSDLWithUnusedFields, annotateSchemaWithUnusedFields, unused } from './unused.js';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
@@ -223,6 +223,140 @@ yargs(hideBin(process.argv))
         argv['exclude-subscriptions'] as boolean,
       );
       extractor.extractOperations();
+    },
+  )
+  .command(
+    'annotate-unused',
+    'Output schema SDL annotated to mark unused fields based on operations found in source files',
+    (y) =>
+      y
+        .option('src', {
+          type: 'string',
+          describe: 'Source folder to scan',
+          default: './graphql',
+        })
+        .option('schema', {
+          type: 'string',
+          describe: 'Path to GraphQL schema (.graphql/.gql or introspection .json)',
+          demandOption: true,
+        })
+        .option('out', {
+          type: 'string',
+          describe: 'Output file path (defaults to overwriting --schema). Use "-" to write to stdout.',
+        })
+        .option('mode', {
+          type: 'string',
+          choices: ['deprecated', 'directive'] as const,
+          describe: 'Annotation mode: use @deprecated(...) or a custom directive',
+          default: 'deprecated',
+        })
+        .option('directive-name', {
+          type: 'string',
+          describe: 'Directive name when mode=directive (default: unused)',
+        })
+        .option('reason', {
+          type: 'string',
+          describe: 'Annotation reason string',
+          default: 'relay-extractor: unused',
+        })
+        .option('add-directive-definition', {
+          type: 'boolean',
+          describe: 'When mode=directive, prepend directive definition if missing',
+          default: true,
+        }),
+    (argv) => {
+      const src = argv.src as string;
+      const schemaArg = argv.schema as string;
+      const outFile = argv.out as string | undefined;
+
+      if (!fs.existsSync(src)) {
+        console.error(`Source folder does not exist: ${src}`);
+        return;
+      }
+
+      // Gather documents from source files
+      const getFiles = (dir: string, extensions: string[]): string[] => {
+        const found: string[] = [];
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            found.push(...getFiles(fullPath, extensions));
+          } else if (entry.isFile() && extensions.some((ext) => entry.name.endsWith(ext))) {
+            found.push(fullPath);
+          }
+        }
+        return found;
+      };
+
+      const sourceFiles = getFiles(src, ['.ts', '.tsx', '.js', '.jsx']);
+      const documents: ReturnType<typeof processRelaySourceFile> = [] as any;
+      sourceFiles.forEach((file) => {
+        const docs = processRelaySourceFile(file);
+        if (docs && docs.length > 0) documents.push(...docs);
+      });
+
+      if (!documents || documents.length === 0) {
+        console.log('No GraphQL documents found in source files.');
+        return;
+      }
+
+      // Load schema
+      let schema = undefined as ReturnType<typeof buildSchema> | ReturnType<typeof buildClientSchema> | undefined;
+      let schemaSDL = undefined as string | undefined;
+      try {
+        const schemaContent = fs.readFileSync(schemaArg, 'utf-8');
+        if (schemaArg.endsWith('.graphql') || schemaArg.endsWith('.gql')) {
+          schemaSDL = schemaContent;
+          schema = buildSchema(schemaContent);
+        } else if (schemaArg.endsWith('.json')) {
+          const json = JSON.parse(schemaContent);
+          const introspection = json.data ?? json;
+          if (introspection && introspection.__schema) {
+            schema = buildClientSchema(introspection);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load schema:', e instanceof Error ? e.message : e);
+        return;
+      }
+
+      if (!schema) {
+        console.error('Failed to construct GraphQL schema from provided path.');
+        return;
+      }
+
+      const mode = argv.mode as 'deprecated' | 'directive';
+      const directiveName = (argv['directive-name'] as string | undefined) ?? undefined;
+      const reason = argv.reason as string;
+      const addDirectiveDefinition = argv['add-directive-definition'] as boolean;
+
+      // Prefer preserving original SDL (including `extend type ...`) when available
+      let annotatedSDL: string;
+      if (schemaSDL) {
+        const report = unused(schema as any, documents as any);
+        annotatedSDL = annotateSchemaSDLWithUnusedFields(schemaSDL, report.unusedFieldsByType, {
+          mode,
+          directiveName,
+          reason,
+          addDirectiveDefinition,
+        });
+      } else {
+        annotatedSDL = annotateSchemaWithUnusedFields(schema as any, documents as any, {
+          mode,
+          directiveName,
+          reason,
+          addDirectiveDefinition,
+        });
+      }
+
+      const destination = outFile ?? schemaArg;
+      if (destination === '-') {
+        process.stdout.write(annotatedSDL);
+        if (!annotatedSDL.endsWith('\n')) process.stdout.write('\n');
+      } else {
+        fs.writeFileSync(destination, annotatedSDL, 'utf-8');
+      }
     },
   )
   .command(

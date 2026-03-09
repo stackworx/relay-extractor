@@ -12,6 +12,7 @@ Extract operations from a source folder to an output directory. Optionally provi
 
 ```bash
 npx @stackworx/relay-extractor \
+	extract \
 	--src ./src \
 	--out ./out \
 	--schema ./schema.graphql \
@@ -19,6 +20,28 @@ npx @stackworx/relay-extractor \
 ```
 
 - **`--exclude-subscriptions`**: When set, subscription operations are skipped and not written to the output.
+
+Annotate your schema SDL to mark unused fields (based on operations found in source files).
+
+```bash
+npx @stackworx/relay-extractor \
+	annotate-unused \
+	--src ./src \
+	--schema ./schema.graphql
+```
+
+By default this overwrites the file passed to `--schema`. To write somewhere else (or to stdout):
+
+```bash
+# Write to a different file
+npx @stackworx/relay-extractor annotate-unused --src ./src --schema ./schema.graphql --out ./schema.annotated.graphql
+
+# Print to stdout
+npx @stackworx/relay-extractor annotate-unused --src ./src --schema ./schema.graphql --out -
+```
+
+- Default annotation mode is `@deprecated(reason: "relay-extractor: unused")`.
+- Use `--mode directive --directive-name unused` to apply a custom directive instead.
 
 ## Issues
 

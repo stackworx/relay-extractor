@@ -1,0 +1,1 @@
+npm publish --access public --//registry.npmjs.org/:_authToken=$NPM_TOKEN
