@@ -23,8 +23,7 @@ jobs:
 
       - name: Upgrade npm to latest
         run: |
-          corepack enable
-          corepack prepare npm@latest --activate
+          npm install -g npm@latest
           npm -v
 
       - name: Install dependencies
