@@ -5,6 +5,10 @@
   "description": "Relay Query Extractor for Testing",
   "license": "MIT",
   "homepage": "https://github.com/stackworx/RelayExtractor",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stackworx/relay-extractor.git"
+  },
   "exports": {
     ".": "./dist/index.mjs",
     "./package.json": "./package.json"
