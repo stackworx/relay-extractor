@@ -1,6 +1,6 @@
 # Read Me
 
-[![CI](https://img.shields.io/github/actions/workflow/status/stackworx/RelayExtractor/ci.yml?branch=main)](https://github.com/stackworx/RelayExtractor/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/stackworx/relay-extractor/ci.yml?branch=main)](https://github.com/stackworx/relay-extractor/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/%40stackworx%2Frelay-extractor)](https://www.npmjs.com/package/@stackworx/relay-extractor)
 
 This project is meant to extract all the GraphQL operations from a relay project
