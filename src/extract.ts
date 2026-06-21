@@ -1,5 +1,6 @@
 
 import * as fs from 'fs';
+import * as path from 'path';
 import {
   parse as gqlParse,
   type DocumentNode,
@@ -94,3 +95,65 @@ import { stripRelayCompilerDirectives } from './strip.js';
     }
     return documents;
   }
+
+/** Source file extensions scanned for embedded Relay `graphql` tagged templates. */
+export const RELAY_SOURCE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'];
+
+/** Standalone GraphQL document extensions (e.g. StrawberryShake / Apollo `.graphql` operations). */
+export const GRAPHQL_DOCUMENT_EXTENSIONS = ['.graphql', '.gql'];
+
+/**
+ * Parse a standalone GraphQL document file (a `.graphql`/`.gql` operations file, as used by
+ * StrawberryShake, Apollo, urql, etc.). Unlike {@link processRelaySourceFile} the operations are not
+ * embedded in `graphql` tagged templates — the whole file is a GraphQL document.
+ */
+export function processGraphQLDocumentFile(filePath: string): DocumentNode[] {
+  const code = fs.readFileSync(filePath, 'utf-8');
+  try {
+    // Strip Relay compiler directives for parity with the tagged-template path (a no-op for the
+    // typical non-Relay document, but keeps downstream handling identical).
+    const cleaned = stripRelayCompilerDirectives(gqlParse(code)) as DocumentNode;
+    return [cleaned];
+  } catch (e) {
+    console.error('  Error parsing GraphQL document', filePath, e instanceof Error ? e.message : e);
+    return [];
+  }
+}
+
+/** Recursively collect files under `dir` whose name ends with one of `extensions`. */
+export function getSourceFiles(dir: string, extensions: string[]): string[] {
+  const found: string[] = [];
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...getSourceFiles(fullPath, extensions));
+    } else if (entry.isFile() && extensions.some(ext => entry.name.endsWith(ext))) {
+      found.push(fullPath);
+    }
+  }
+  return found;
+}
+
+/**
+ * Collect every GraphQL document under `srcDir`, supporting both Relay `graphql` tagged templates in
+ * `.ts/.tsx/.js/.jsx` source and standalone `.graphql`/`.gql` document files. Pass `schemaPath` to skip
+ * the schema file if it happens to live inside `srcDir` (so it isn't parsed as an operations document).
+ */
+export function collectDocuments(srcDir: string, schemaPath?: string): DocumentNode[] {
+  const skip = schemaPath ? path.resolve(schemaPath) : undefined;
+  const files = getSourceFiles(srcDir, [
+    ...RELAY_SOURCE_EXTENSIONS,
+    ...GRAPHQL_DOCUMENT_EXTENSIONS,
+  ]);
+  const documents: DocumentNode[] = [];
+  for (const file of files) {
+    if (skip && path.resolve(file) === skip) continue;
+    const isGraphQLDocument = GRAPHQL_DOCUMENT_EXTENSIONS.some(ext => file.endsWith(ext));
+    const docs = isGraphQLDocument
+      ? processGraphQLDocumentFile(file)
+      : processRelaySourceFile(file);
+    if (docs && docs.length > 0) documents.push(...docs);
+  }
+  return documents;
+}

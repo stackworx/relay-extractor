@@ -15,7 +15,7 @@ import {
 } from 'graphql';
 // moved optimization into transform wrapper
 
-import {processRelaySourceFile} from './extract.js';
+import {collectDocuments} from './extract.js';
 import {stripRelayClientFields} from './strip.js';
 import { optimizeAndFlatten, stripUnknownArgsAndUnusedVars } from './transform.js';
 import { annotateSchemaSDLWithUnusedFields, annotateSchemaWithUnusedFields, unused } from './unused.js';
@@ -54,14 +54,7 @@ class GraphQLOperationExtractor {
 
     this.ensureOutDir();
 
-    const sourceFiles = this.getFiles(this.sourceFolder, ['.ts', '.tsx', '.js', '.jsx']);
-
-    const allDocuments = [] as ReturnType<typeof processRelaySourceFile>;
-    sourceFiles.forEach(file => {
-      const documents = processRelaySourceFile(file);
-      if (!documents || documents.length === 0) return;
-      allDocuments.push(...documents);
-    });
+    const allDocuments = collectDocuments(this.sourceFolder, this.schemaPath);
 
     if (allDocuments.length === 0) {
       console.log('No GraphQL documents found in source files.');
@@ -164,23 +157,6 @@ class GraphQLOperationExtractor {
     });
   }
 
-  /**
-   * Get all GraphQL files from the source folder (recursive)
-   */
-  private getFiles(dir: string, extensions: string[]): string[] {
-    const found: string[] = [];
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        found.push(...this.getFiles(fullPath, extensions));
-      } else if (entry.isFile() && extensions.some(ext => entry.name.endsWith(ext))) {
-        found.push(fullPath);
-      }
-    }
-    return found;
-}
-
   private ensureOutDir(): void {
     if (!fs.existsSync(this.outDir)) {
       fs.mkdirSync(this.outDir, { recursive: true });
@@ -274,27 +250,8 @@ yargs(hideBin(process.argv))
         return;
       }
 
-      // Gather documents from source files
-      const getFiles = (dir: string, extensions: string[]): string[] => {
-        const found: string[] = [];
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name);
-          if (entry.isDirectory()) {
-            found.push(...getFiles(fullPath, extensions));
-          } else if (entry.isFile() && extensions.some((ext) => entry.name.endsWith(ext))) {
-            found.push(fullPath);
-          }
-        }
-        return found;
-      };
-
-      const sourceFiles = getFiles(src, ['.ts', '.tsx', '.js', '.jsx']);
-      const documents: ReturnType<typeof processRelaySourceFile> = [] as any;
-      sourceFiles.forEach((file) => {
-        const docs = processRelaySourceFile(file);
-        if (docs && docs.length > 0) documents.push(...docs);
-      });
+      // Gather documents from source files (Relay `graphql` tags + standalone .graphql/.gql docs)
+      const documents = collectDocuments(src, schemaArg);
 
       if (!documents || documents.length === 0) {
         console.log('No GraphQL documents found in source files.');
@@ -361,7 +318,7 @@ yargs(hideBin(process.argv))
   )
   .command(
     'unused',
-    'Identity unused fields in the GraphQL schema based on operations found in source files',
+    'Identify unused fields in the GraphQL schema based on operations found in source files',
     (y) =>
       y
         .option('src', {
@@ -419,27 +376,8 @@ yargs(hideBin(process.argv))
         return;
       }
 
-      // Gather documents from source files
-      const getFiles = (dir: string, extensions: string[]): string[] => {
-        const found: string[] = [];
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name);
-          if (entry.isDirectory()) {
-            found.push(...getFiles(fullPath, extensions));
-          } else if (entry.isFile() && extensions.some(ext => entry.name.endsWith(ext))) {
-            found.push(fullPath);
-          }
-        }
-        return found;
-      };
-
-      const sourceFiles = getFiles(src, ['.ts', '.tsx', '.js', '.jsx']);
-      const documents: ReturnType<typeof processRelaySourceFile> = [] as any;
-      sourceFiles.forEach(file => {
-        const docs = processRelaySourceFile(file);
-        if (docs && docs.length > 0) documents.push(...docs);
-      });
+      // Gather documents from source files (Relay `graphql` tags + standalone .graphql/.gql docs)
+      const documents = collectDocuments(src, schemaArg);
 
       if (!documents || documents.length === 0) {
         console.log('No GraphQL documents found in source files.');
