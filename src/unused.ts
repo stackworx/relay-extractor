@@ -90,7 +90,6 @@ function makeUnusedDirectiveDefinition(name: string): DirectiveDefinitionNode {
         value: 'FIELD_DEFINITION',
       },
     ],
-    directives: [],
   };
 }
 
